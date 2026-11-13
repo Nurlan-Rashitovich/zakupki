@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Учёт закупок</title>
+<style>
+  :root {
+    --bg: #fafaf9; --card: #ffffff; --text: #1c1917; --muted: #78716c;
+    --line: #e7e5e4; --accent: #1c1917; --buy: #1c1917; --ret: #16a34a; --neg: #dc2626;
+    --c1:#2563eb; --c2:#f59e0b; --c3:#10b981; --c4:#ef4444; --c5:#8b5cf6; --c6:#06b6d4; --c7:#ec4899; --c8:#a8a29e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0c0a09; --card:#1c1917; --text:#f5f5f4; --muted:#a8a29e; --line:#292524;
+      --accent:#f5f5f4; --buy:#f5f5f4; --ret:#4ade80; --neg:#f87171;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:28px; }
+  h1 { font-size: 22px; font-weight: 600; margin:0; letter-spacing:-.01em; }
+  h2 { font-size: 13px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing:.06em; margin:0 0 14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; }
+  .grid { display:grid; gap:16px; }
+  .stats { grid-template-columns: repeat(3, 1fr); margin-bottom:16px; }
+  .stat .label { font-size:13px; color:var(--muted); }
+  .stat .value { font-size:26px; font-weight:600; letter-spacing:-.02em; margin-top:4px; font-variant-numeric: tabular-nums; }
+  .charts { grid-template-columns: 1fr 1.4fr; margin-bottom:16px; }
+  input, select, button { font:inherit; color:inherit; }
+  input, select { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:9px 11px; width:100%; outline:none; }
+  input:focus, select:focus { border-color: var(--muted); }
+  button { cursor:pointer; border-radius:10px; padding:9px 14px; border:1px solid var(--line); background:var(--card); }
+  button.primary { background:var(--accent); color:var(--bg); border-color:var(--accent); }
+  button.ghost { border:none; background:none; color:var(--muted); padding:4px 8px; }
+  button.ghost:hover { color:var(--neg); }
+  .toggle { display:inline-flex; border:1px solid var(--line); border-radius:10px; padding:3px; background:var(--bg); }
+  .toggle button { border:none; background:none; padding:6px 14px; border-radius:7px; color:var(--muted); }
+  .toggle button.on { background:var(--card); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  form.add { display:grid; grid-template-columns: auto 1.6fr 1fr 1fr .9fr auto; gap:10px; align-items:center; }
+  .toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .toolbar input[type=month] { width:auto; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric: tabular-nums; }
+  th { text-align:left; font-weight:500; color:var(--muted); font-size:13px; padding:8px 6px; border-bottom:1px solid var(--line); }
+  td { padding:10px 6px; border-bottom:1px solid var(--line); }
+  tr:last-child td { border-bottom:none; }
+  .r { text-align:right; }
+  .tag { font-size:12px; padding:2px 8px; border-radius:99px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
+  .tag.ret { color:var(--ret); border-color:currentColor; }
+  .amt-ret { color:var(--ret); }
+  .muted { color:var(--muted); }
+  .empty { text-align:center; color:var(--muted); padding:32px 0; }
+  .legend { list-style:none; padding:0; margin:14px 0 0; font-size:13px; }
+  .legend li { display:flex; align-items:center; gap:8px; padding:3px 0; }
+  .legend .dot { width:9px; height:9px; border-radius:50%; flex:none; }
+  .legend .v { margin-left:auto; font-variant-numeric: tabular-nums; }
+  .donut-box { display:flex; justify-content:center; }
+  svg text { fill: var(--muted); font-size: 11px; }
+  .links { display:flex; gap:6px; flex-wrap:wrap; }
+  .links button { font-size:13px; padding:6px 10px; }
+  .section-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .section-head h2 { margin:0; }
+  @media (max-width: 760px) {
+    .stats { grid-template-columns: 1fr; }
+    .charts { grid-template-columns: 1fr; }
+    form.add { grid-template-columns: 1fr 1fr; }
+    form.add .toggle, form.add .full { grid-column: 1 / -1; }
+    .hide-sm { display:none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Учёт закупок</h1>
+    <div class="toolbar">
+      <input type="month" id="period" title="Период">
+      <button id="allTime">Всё время</button>
+    </div>
+  </header>
+
+  <div class="grid stats">
+    <div class="card stat"><div class="label">Куплено</div><div class="value" id="sBuy">0</div></div>
+    <div class="card stat"><div class="label">Возвращено</div><div class="value amt-ret" id="sRet">0</div></div>
+    <div class="card stat"><div class="label">Итого потрачено</div><div class="value" id="sNet">0</div></div>
+  </div>
+
+  <div class="grid charts">
+    <div class="card">
+      <h2>На что потрачено</h2>
+      <div class="donut-box" id="donut"></div>
+      <ul class="legend" id="legend"></ul>
+    </div>
+    <div class="card">
+      <h2 id="barsTitle">По месяцам</h2>
+      <div id="bars"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <h2>Новая запись</h2>
+    <form class="add" id="form" autocomplete="off">
+      <div class="toggle" id="typeToggle">
+        <button type="button" data-t="buy" class="on">Покупка</button>
+        <button type="button" data-t="ret">Возврат</button>
+      </div>
+      <input class="full" id="fName" placeholder="Что" required>
+      <input id="fCat" placeholder="Категория" list="cats" required>
+      <input id="fDate" type="date" required>
+      <input id="fAmt" type="number" min="0" step="0.01" placeholder="Сумма" required>
+      <button class="primary full" type="submit">Добавить</button>
+      <datalist id="cats"></datalist>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="section-head">
+      <h2>Записи</h2>
+      <div class="links">
+        <button id="exportCsv">Excel (CSV)</button>
+        <button id="exportJson">Резервная копия</button>
+        <button id="importJson">Восстановить</button>
+        <input type="file" id="importFile" accept=".json" hidden>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Дата</th><th>Что</th><th class="hide-sm">Категория</th><th>Тип</th><th class="r">Сумма</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const KEY = 'purchases.v1';
+const CURRENCY = '₸';
+const DEFAULT_CATS = ['Канцелярия', 'Хозтовары', 'Продукты', 'Техника', 'Мебель', 'Транспорт', 'Прочее'];
+const COLORS = ['--c1','--c2','--c3','--c4','--c5','--c6','--c7'].map(v => getComputedStyle(document.documentElement).getPropertyValue(v).trim());
+const OTHER_COLOR = getComputedStyle(document.documentElement).getPropertyValue('--c8').trim();
+const MONTHS = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+
+let items = load();
+let type = 'buy';
+let period = ''; // '' = всё время, иначе 'YYYY-MM'
+
+function load() { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(items)); } catch {} }
+const $ = id => document.getElementById(id);
+const money = n => Math.round(n).toLocaleString('ru-RU') + ' ' + CURRENCY;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const fmtDate = d => { const [y,m,day] = d.split('-'); return `${day}.${m}.${y}`; };
+
+function filtered() { return period ? items.filter(i => i.date.startsWith(period)) : items; }
+
+// ---- форма ----
+$('fDate').value = today();
+$('typeToggle').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  type = b.dataset.t;
+  [...$('typeToggle').children].forEach(x => x.classList.toggle('on', x === b));
+});
+$('form').addEventListener('submit', e => {
+  e.preventDefault();
+  items.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    type, name: $('fName').value.trim(), cat: $('fCat').value.trim(),
+    date: $('fDate').value, amount: Math.abs(parseFloat($('fAmt').value) || 0)
+  });
+  save();
+  $('fName').value = ''; $('fAmt').value = '';
+  $('fName').focus();
+  render();
+});
+$('rows').addEventListener('click', e => {
+  const b = e.target.closest('[data-del]'); if (!b) return;
+  if (!confirm('Удалить запись?')) return;
+  items = items.filter(i => i.id !== b.dataset.del);
+  save(); render();
+});
+
+// ---- период ----
+$('period').addEventListener('change', e => { period = e.target.value; render(); });
+$('allTime').addEventListener('click', () => { period = ''; $('period').value = ''; render(); });
+
+// ---- рендер ----
+function render() {
+  const list = filtered();
+  const buy = list.filter(i => i.type === 'buy').reduce((s,i) => s + i.amount, 0);
+  const ret = list.filter(i => i.type === 'ret').reduce((s,i) => s + i.amount, 0);
+  $('sBuy').textContent = money(buy);
+  $('sRet').textContent = money(ret);
+  $('sNet').textContent = money(buy - ret);
+  $('allTime').classList.toggle('primary', !period);
+
+  const cats = [...new Set([...DEFAULT_CATS, ...items.map(i => i.cat)])];
+  $('cats').innerHTML = cats.map(c => `<option value="${esc(c)}">`).join('');
+
+  renderTable(list);
+  renderDonut(list);
+  renderBars();
+}
+
+function renderTable(list) {
+  const sorted = [...list].sort((a,b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  $('rows').innerHTML = sorted.length ? sorted.map(i => `
+    <tr>
+      <td class="muted">${fmtDate(i.date)}</td>
+      <td>${esc(i.name)}</td>
+      <td class="hide-sm muted">${esc(i.cat)}</td>
+      <td><span class="tag ${i.type === 'ret' ? 'ret' : ''}">${i.type === 'ret' ? 'возврат' : 'покупка'}</span></td>
+      <td class="r ${i.type === 'ret' ? 'amt-ret' : ''}">${i.type === 'ret' ? '−' : ''}${money(i.amount)}</td>
+      <td class="r"><button class="ghost" data-del="${i.id}" title="Удалить">✕</button></td>
+    </tr>`).join('') : `<tr><td colspan="6" class="empty">Пока нет записей</td></tr>`;
+}
+
+function renderDonut(list) {
+  const by = {};
+  list.forEach(i => { by[i.cat] = (by[i.cat] || 0) + (i.type === 'ret' ? -i.amount : i.amount); });
+  let data = Object.entries(by).filter(([,v]) => v > 0).sort((a,b) => b[1] - a[1]);
+  if (data.length > 7) {
+    const rest = data.slice(6).reduce((s,[,v]) => s + v, 0);
+    data = [...data.slice(0,6), ['Остальное', rest]];
+  }
+  const total = data.reduce((s,[,v]) => s + v, 0);
+  const R = 70, r = 48, C = 90;
+  if (!total) {
+    $('donut').innerHTML = `<svg width="180" height="180"><circle cx="${C}" cy="${C}" r="${(R+r)/2}" fill="none" stroke="var(--line)" stroke-width="${R-r}"/><text x="${C}" y="${C+4}" text-anchor="middle">нет данных</text></svg>`;
+    $('legend').innerHTML = '';
+    return;
+  }
+  let a = -Math.PI / 2, paths = '';
+  const color = (i, name) => name === 'Остальное' ? OTHER_COLOR : COLORS[i % COLORS.length];
+  data.forEach(([name, v], i) => {
+    const frac = v / total;
+    const a2 = a + frac * Math.PI * 2 - (data.length > 1 ? 0.012 : 0);
+    if (frac >= 0.9999) {
+      paths += `<circle cx="${C}" cy="${C}" r="${(R+r)/2}" fill="none" stroke="${color(i,name)}" stroke-width="${R-r}"/>`;
+    } else {
+      const large = (a2 - a) > Math.PI ? 1 : 0;
+      const p = (rad, ang) => `${C + rad*Math.cos(ang)},${C + rad*Math.sin(ang)}`;
+      paths += `<path fill="${color(i,name)}" d="M${p(R,a)} A${R},${R} 0 ${large} 1 ${p(R,a2)} L${p(r,a2)} A${r},${r} 0 ${large} 0 ${p(r,a)}Z"><title>${esc(name)}: ${money(v)}</title></path>`;
+    }
+    a += frac * Math.PI * 2;
+  });
+  $('donut').innerHTML = `<svg width="180" height="180" viewBox="0 0 180 180">${paths}
+    <text x="${C}" y="${C-2}" text-anchor="middle" style="fill:var(--text);font-size:15px;font-weight:600">${Math.round(total).toLocaleString('ru-RU')}</text>
+    <text x="${C}" y="${C+15}" text-anchor="middle">${CURRENCY} всего</text></svg>`;
+  $('legend').innerHTML = data.map(([name, v], i) => `
+    <li><span class="dot" style="background:${color(i,name)}"></span>${esc(name)}
+    <span class="muted">${Math.round(v/total*100)}%</span><span class="v">${money(v)}</span></li>`).join('');
+}
+
+function renderBars() {
+  // Если выбран месяц — по дням этого месяца, иначе — последние 12 месяцев
+  let keys, labels, title;
+  if (period) {
+    const [y, m] = period.split('-').map(Number);
+    const days = new Date(y, m, 0).getDate();
+    keys = Array.from({length: days}, (_, i) => `${period}-${String(i+1).padStart(2,'0')}`);
+    labels = keys.map((_, i) => (i+1) % 5 === 0 || i === 0 ? String(i+1) : '');
+    title = `По дням · ${MONTHS[m-1]} ${y}`;
+  } else {
+    const now = new Date(); keys = []; labels = [];
+    for (let k = 11; k >= 0; k--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - k, 1);
+      keys.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+      labels.push(MONTHS[d.getMonth()]);
+    }
+    title = 'По месяцам · последние 12';
+  }
+  $('barsTitle').textContent = title;
+  const vals = keys.map(k => items.filter(i => i.date.startsWith(k))
+    .reduce((s,i) => s + (i.type === 'ret' ? -i.amount : i.amount), 0));
+  const max = Math.max(...vals.map(v => Math.max(v, 0)), 1);
+  const W = 520, H = 230, padB = 22, padT = 24, n = keys.length;
+  const bw = W / n, inner = Math.max(bw * (n > 15 ? 0.7 : 0.55), 2);
+  const bars = vals.map((v, i) => {
+    const h = Math.max(v, 0) / max * (H - padB - padT);
+    const x = i * bw + (bw - inner) / 2;
+    return `<rect x="${x}" y="${H - padB - h}" width="${inner}" height="${Math.max(h, v > 0 ? 2 : 0)}" rx="3" fill="var(--c1)"><title>${labels[i] || keys[i]}: ${money(v)}</title></rect>
+      <text x="${i*bw + bw/2}" y="${H - 6}" text-anchor="middle">${labels[i]}</text>`;
+  }).join('');
+  const peak = vals.indexOf(Math.max(...vals));
+  const peakLbl = vals[peak] > 0 ? `<text x="${W}" y="12" text-anchor="end">макс. ${money(vals[peak])}</text>` : '';
+  $('bars').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;height:auto">
+    <line x1="0" x2="${W}" y1="${H-padB}" y2="${H-padB}" stroke="var(--line)"/>${bars}${peakLbl}</svg>`;
+}
+
+// ---- экспорт / импорт ----
+function download(name, text, mime) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], {type: mime}));
+  a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$('exportCsv').addEventListener('click', () => {
+  const q = s => `"${String(s).replace(/"/g, '""')}"`;
+  const rows = [['Дата','Что','Категория','Тип','Сумма'],
+    ...[...filtered()].sort((a,b) => a.date.localeCompare(b.date))
+      .map(i => [fmtDate(i.date), i.name, i.cat, i.type === 'ret' ? 'Возврат' : 'Покупка', String(i.type === 'ret' ? -i.amount : i.amount).replace('.', ',')])];
+  download(`zakupki${period ? '-' + period : ''}.csv`, '﻿' + rows.map(r => r.map(q).join(';')).join('\n'), 'text/csv');
+});
+$('exportJson').addEventListener('click', () => download(`zakupki-backup-${today()}.json`, JSON.stringify(items, null, 1), 'application/json'));
+$('importJson').addEventListener('click', () => $('importFile').click());
+$('importFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    const ok = i => i && (i.type === 'buy' || i.type === 'ret') && typeof i.name === 'string' && typeof i.cat === 'string'
+      && /^\d{4}-\d{2}-\d{2}$/.test(i.date) && typeof i.amount === 'number' && i.amount >= 0;
+    if (!Array.isArray(data) || !data.every(ok)) throw 0;
+    data.forEach(i => { i.id = i.id ? String(i.id) : Date.now().toString(36) + Math.random().toString(36).slice(2,6); });
+    if (!confirm(`Заменить текущие данные (${items.length} записей) на копию (${data.length} записей)?`)) return;
+    items = data; save(); render();
+  } catch { alert('Не удалось прочитать файл'); }
+});
+
+render();
+</script>
+</body>
+</html>
