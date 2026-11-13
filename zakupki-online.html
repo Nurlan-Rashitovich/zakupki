@@ -1,0 +1,433 @@
+<title>Учёт закупок</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Одна колонка карточек: итоги → графики → форма → таблица. Тёплый серый, один акцент для графиков. */
+  :root {
+    --bg: #fafaf9; --card: #ffffff; --text: #1c1917; --muted: #78716c;
+    --line: #e7e5e4; --accent: #1c1917; --on-accent: #fafaf9; --ret: #15803d; --neg: #dc2626;
+    --c1:#2563eb; --c2:#d97706; --c3:#059669; --c4:#dc2626; --c5:#7c3aed; --c6:#0891b2; --c7:#db2777; --c8:#a8a29e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#0c0a09; --card:#1c1917; --text:#f5f5f4; --muted:#a8a29e; --line:#292524;
+      --accent:#f5f5f4; --on-accent:#0c0a09; --ret:#4ade80; --neg:#f87171;
+      --c1:#60a5fa; --c2:#fbbf24; --c3:#34d399; --c4:#f87171; --c5:#a78bfa; --c6:#22d3ee; --c7:#f472b6; --c8:#78716c;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#0c0a09; --card:#1c1917; --text:#f5f5f4; --muted:#a8a29e; --line:#292524;
+    --accent:#f5f5f4; --on-accent:#0c0a09; --ret:#4ade80; --neg:#f87171;
+    --c1:#60a5fa; --c2:#fbbf24; --c3:#34d399; --c4:#f87171; --c5:#a78bfa; --c6:#22d3ee; --c7:#f472b6; --c8:#78716c;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .wrap { max-width: 980px; margin: 0 auto; padding-block: 32px 64px; }
+  header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+  h1 { font-size: 22px; font-weight: 600; margin:0; letter-spacing:-.01em; }
+  h2 { font-size: 13px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing:.06em; margin:0 0 14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; min-width:0; }
+  .grid { display:grid; gap:16px; }
+  .stats { grid-template-columns: repeat(3, 1fr); margin-bottom:16px; }
+  .stat .label { font-size:13px; color:var(--muted); }
+  .stat .value { font-size:26px; font-weight:600; letter-spacing:-.02em; margin-top:4px; font-variant-numeric: tabular-nums; }
+  .charts { grid-template-columns: 1fr 1.4fr; margin-bottom:16px; }
+  input, select, button { font:inherit; color:inherit; }
+  input { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:9px 11px; width:100%; outline:none; min-width:0; }
+  input:focus { border-color: var(--muted); }
+  button { cursor:pointer; border-radius:10px; padding:9px 14px; border:1px solid var(--line); background:var(--card); }
+  button:focus-visible, input:focus-visible { outline:2px solid var(--c1); outline-offset:1px; }
+  button:disabled { opacity:.5; cursor:default; }
+  button.primary { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
+  button.danger { background:var(--neg); color:#fff; border-color:var(--neg); }
+  button.ghost { border:none; background:none; color:var(--muted); padding:4px 8px; }
+  button.ghost:hover { color:var(--neg); }
+  .toggle { display:inline-flex; border:1px solid var(--line); border-radius:10px; padding:3px; background:var(--bg); }
+  .toggle button { border:none; background:none; padding:6px 14px; border-radius:7px; color:var(--muted); }
+  .toggle button.on { background:var(--card); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  form.add { display:grid; grid-template-columns: auto 1.6fr 1fr 1fr .9fr auto; gap:10px; align-items:center; }
+  .toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .toolbar input[type=month] { width:auto; }
+  .sync { font-size:13px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+  .sync::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--c8); }
+  .sync.ok::before { background:var(--ret); }
+  .sync.err { color:var(--neg); } .sync.err::before { background:var(--neg); }
+  .table-box { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric: tabular-nums; }
+  th { text-align:left; font-weight:500; color:var(--muted); font-size:13px; padding:8px 6px; border-bottom:1px solid var(--line); }
+  td { padding:10px 6px; border-bottom:1px solid var(--line); }
+  tr:last-child td { border-bottom:none; }
+  .r { text-align:right; white-space:nowrap; }
+  .tag { font-size:12px; padding:2px 8px; border-radius:99px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
+  .tag.ret { color:var(--ret); border-color:currentColor; }
+  .amt-ret { color:var(--ret); }
+  .muted { color:var(--muted); }
+  .empty { text-align:center; color:var(--muted); padding:32px 0; }
+  .legend { list-style:none; padding:0; margin:14px 0 0; font-size:13px; }
+  .legend li { display:flex; align-items:center; gap:8px; padding:3px 0; }
+  .legend .dot { width:9px; height:9px; border-radius:50%; flex:none; }
+  .legend .v { margin-left:auto; font-variant-numeric: tabular-nums; }
+  .donut-box { display:flex; justify-content:center; }
+  svg text { fill: var(--muted); font-size: 11px; }
+  .links { display:flex; gap:6px; flex-wrap:wrap; }
+  .links button { font-size:13px; padding:6px 10px; }
+  .section-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .section-head h2 { margin:0; }
+  .notice { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--bg); margin-bottom:14px; font-size:14px; }
+  .notice.err { border-color:var(--neg); color:var(--neg); }
+  .notice .grow { flex:1; min-width:180px; }
+  .readonly { font-size:14px; color:var(--muted); }
+  @media (max-width: 760px) {
+    .stats { grid-template-columns: 1fr; }
+    .charts { grid-template-columns: 1fr; }
+    form.add { grid-template-columns: 1fr 1fr; }
+    form.add .toggle, form.add .full { grid-column: 1 / -1; }
+    .hide-sm { display:none; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Учёт закупок</h1>
+    <div class="toolbar">
+      <span class="sync" id="sync">Подключение к базе…</span>
+      <input type="month" id="period" title="Период" aria-label="Месяц">
+      <button id="allTime">Всё время</button>
+    </div>
+  </header>
+
+  <div class="grid stats">
+    <div class="card stat"><div class="label">Куплено</div><div class="value" id="sBuy">0 ₸</div></div>
+    <div class="card stat"><div class="label">Возвращено</div><div class="value amt-ret" id="sRet">0 ₸</div></div>
+    <div class="card stat"><div class="label">Итого потрачено</div><div class="value" id="sNet">0 ₸</div></div>
+  </div>
+
+  <div class="grid charts">
+    <div class="card">
+      <h2>На что потрачено</h2>
+      <div class="donut-box" id="donut"></div>
+      <ul class="legend" id="legend"></ul>
+    </div>
+    <div class="card">
+      <h2 id="barsTitle">По месяцам</h2>
+      <div id="bars"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px" id="formCard">
+    <h2>Новая запись</h2>
+    <form class="add" id="form" autocomplete="off">
+      <div class="toggle" id="typeToggle">
+        <button type="button" data-t="buy" class="on">Покупка</button>
+        <button type="button" data-t="ret">Возврат</button>
+      </div>
+      <input class="full" id="fName" placeholder="Что" aria-label="Что" required>
+      <input id="fCat" placeholder="Категория" aria-label="Категория" list="cats" required>
+      <input id="fDate" type="date" aria-label="Дата" required>
+      <input id="fAmt" type="number" min="0" step="0.01" placeholder="Сумма" aria-label="Сумма" required>
+      <button class="primary full" type="submit" id="addBtn">Добавить</button>
+      <datalist id="cats"></datalist>
+    </form>
+    <p class="readonly" id="readonly" hidden>У вас доступ только на просмотр. Чтобы вносить записи, попросите владельца дать вам уровень «Contributor» или выше.</p>
+  </div>
+
+  <div class="card">
+    <div class="section-head">
+      <h2>Записи</h2>
+      <div class="links">
+        <button id="exportCsv">Excel (CSV)</button>
+        <button id="exportJson">Резервная копия</button>
+        <button id="importJson">Восстановить</button>
+        <input type="file" id="importFile" accept=".json,application/json" hidden>
+      </div>
+    </div>
+    <div class="notice" id="notice" hidden></div>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>Дата</th><th>Что</th><th class="hide-sm">Категория</th><th>Тип</th><th class="r">Сумма</th><th></th></tr></thead>
+        <tbody id="rows"><tr><td colspan="6" class="empty">Загружаем записи…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const COL = 'purchases';
+const CURRENCY = '₸';
+const DEFAULT_CATS = ['Канцелярия', 'Хозтовары', 'Продукты', 'Техника', 'Мебель', 'Транспорт', 'Прочее'];
+const COLORS = ['--c1','--c2','--c3','--c4','--c5','--c6','--c7'].map(v => `var(${v})`);
+const OTHER_COLOR = 'var(--c8)';
+const MONTHS = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+
+let db = null, me = null, downloads = null;
+let items = [];
+let loaded = false;
+let canWrite = true;
+let type = 'buy';
+let period = '';
+let pendingDel = null;     // id записи, ждущей подтверждения удаления
+let pendingImport = null;  // массив записей из файла, ждущий подтверждения
+
+const $ = id => document.getElementById(id);
+const money = n => Math.round(n).toLocaleString('ru-RU') + ' ' + CURRENCY;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const fmtDate = d => { const [y,m,day] = d.split('-'); return `${day}.${m}.${y}`; };
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+const filtered = () => period ? items.filter(i => i.date.startsWith(period)) : items;
+const valid = i => i && (i.type === 'buy' || i.type === 'ret') && typeof i.name === 'string' && i.name.trim()
+  && typeof i.cat === 'string' && i.cat.trim() && /^\d{4}-\d{2}-\d{2}$/.test(i.date)
+  && typeof i.amount === 'number' && isFinite(i.amount) && i.amount >= 0;
+
+function setSync(text, cls) { const s = $('sync'); s.textContent = text; s.className = 'sync ' + (cls || ''); }
+function notice(html, isErr) { const n = $('notice'); n.innerHTML = html; n.className = 'notice' + (isErr ? ' err' : ''); n.hidden = !html; }
+function errText(e) {
+  const c = e && e.code;
+  if (c === 'quota_exceeded') return 'База заполнена: удалите старые записи, чтобы добавить новые.';
+  if (c === 'invalid_argument') return 'У вас нет прав на изменение записей.';
+  return 'Не удалось сохранить. Проверьте интернет и попробуйте ещё раз.';
+}
+
+// ---- подключение к общей базе ----
+(async () => {
+  const timer = setTimeout(() => { if (!loaded) setSync('База пока недоступна', 'err'); }, 10000);
+  const use = name => window.claude && window.claude.use ? window.claude.use(name) : Promise.resolve(null);
+  db = await use('db');
+  if (!db) {
+    clearTimeout(timer);
+    setSync('Нет доступа к базе', 'err');
+    $('rows').innerHTML = `<tr><td colspan="6" class="empty">Войдите в claude.ai, чтобы видеть и вносить записи</td></tr>`;
+    setWritable(false);
+    return;
+  }
+  db.collection(COL).onSnapshot(snap => {
+    items = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(valid);
+    if (!snap.metadata.fromCache) { loaded = true; clearTimeout(timer); setSync('Сохранено в общей базе', 'ok'); }
+    render();
+  }, e => {
+    clearTimeout(timer);
+    setSync(e.code === 'revoked' ? 'Доступ к базе закрыт' : 'Связь с базой потеряна, обновите страницу', 'err');
+  });
+  const user = await use('user');
+  if (user) {
+    me = await user.id();
+    const w = await user.can('data.write');
+    if (w === false) setWritable(false);
+  }
+  downloads = await use('downloads');
+})();
+
+function setWritable(w) {
+  canWrite = w;
+  $('form').hidden = !w; $('readonly').hidden = w;
+  $('importJson').hidden = !w;
+  render();
+}
+
+// ---- форма ----
+$('fDate').value = today();
+$('typeToggle').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  type = b.dataset.t;
+  [...$('typeToggle').children].forEach(x => x.classList.toggle('on', x === b));
+});
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!db) return;
+  const rec = { type, name: $('fName').value.trim(), cat: $('fCat').value.trim(),
+    date: $('fDate').value, amount: Math.round(Math.abs(parseFloat($('fAmt').value) || 0) * 100) / 100,
+    createdAt: new Date().toISOString() };
+  if (me) rec.by = me;
+  if (!valid(rec)) return;
+  const btn = $('addBtn'); btn.disabled = true;
+  try {
+    await db.collection(COL).doc(newId()).set(rec);
+    $('fName').value = ''; $('fAmt').value = '';
+    $('fName').focus();
+    notice('');
+  } catch (err) {
+    if (err && err.code === 'invalid_argument') setWritable(false);
+    notice(esc(errText(err)), true);
+  } finally { btn.disabled = false; }
+});
+
+// ---- удаление с подтверждением в строке ----
+$('rows').addEventListener('click', async e => {
+  const del = e.target.closest('[data-del]');
+  const yes = e.target.closest('[data-yes]');
+  const no = e.target.closest('[data-no]');
+  if (del) { pendingDel = del.dataset.del; renderTable(filtered()); return; }
+  if (no) { pendingDel = null; renderTable(filtered()); return; }
+  if (yes) {
+    yes.disabled = true;
+    try { await db.collection(COL).doc(yes.dataset.yes).delete(); pendingDel = null; }
+    catch (err) { notice(esc(errText(err)), true); yes.disabled = false; }
+  }
+});
+
+// ---- период ----
+$('period').addEventListener('change', e => { period = e.target.value; render(); });
+$('allTime').addEventListener('click', () => { period = ''; $('period').value = ''; render(); });
+
+// ---- рендер ----
+function render() {
+  const list = filtered();
+  const buy = list.filter(i => i.type === 'buy').reduce((s,i) => s + i.amount, 0);
+  const ret = list.filter(i => i.type === 'ret').reduce((s,i) => s + i.amount, 0);
+  $('sBuy').textContent = money(buy);
+  $('sRet').textContent = money(ret);
+  $('sNet').textContent = money(buy - ret);
+  $('allTime').classList.toggle('primary', !period);
+
+  const cats = [...new Set([...DEFAULT_CATS, ...items.map(i => i.cat)])];
+  $('cats').innerHTML = cats.map(c => `<option value="${esc(c)}">`).join('');
+
+  if (loaded || items.length) renderTable(list);
+  renderDonut(list);
+  renderBars();
+}
+
+function renderTable(list) {
+  const sorted = [...list].sort((a,b) => b.date.localeCompare(a.date) || String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  $('rows').innerHTML = sorted.length ? sorted.map(i => {
+    const action = !canWrite ? '' : pendingDel === i.id
+      ? `<button class="danger" data-yes="${esc(i.id)}" style="padding:4px 10px;font-size:13px">Удалить</button> <button class="ghost" data-no="1">Отмена</button>`
+      : `<button class="ghost" data-del="${esc(i.id)}" title="Удалить" aria-label="Удалить запись">✕</button>`;
+    return `<tr>
+      <td class="muted">${fmtDate(i.date)}</td>
+      <td>${esc(i.name)}</td>
+      <td class="hide-sm muted">${esc(i.cat)}</td>
+      <td><span class="tag ${i.type === 'ret' ? 'ret' : ''}">${i.type === 'ret' ? 'возврат' : 'покупка'}</span></td>
+      <td class="r ${i.type === 'ret' ? 'amt-ret' : ''}">${i.type === 'ret' ? '−' : ''}${money(i.amount)}</td>
+      <td class="r">${action}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="6" class="empty">Пока нет записей${canWrite ? ' — добавьте первую в форме выше' : ''}</td></tr>`;
+}
+
+function renderDonut(list) {
+  const by = {};
+  list.forEach(i => { by[i.cat] = (by[i.cat] || 0) + (i.type === 'ret' ? -i.amount : i.amount); });
+  let data = Object.entries(by).filter(([,v]) => v > 0).sort((a,b) => b[1] - a[1]);
+  if (data.length > 7) {
+    const rest = data.slice(6).reduce((s,[,v]) => s + v, 0);
+    data = [...data.slice(0,6), ['Остальное', rest]];
+  }
+  const total = data.reduce((s,[,v]) => s + v, 0);
+  const R = 70, r = 48, C = 90;
+  if (!total) {
+    $('donut').innerHTML = `<svg width="180" height="180" viewBox="0 0 180 180"><circle cx="${C}" cy="${C}" r="${(R+r)/2}" style="fill:none;stroke:var(--line)" stroke-width="${R-r}"/><text x="${C}" y="${C+4}" text-anchor="middle">нет данных</text></svg>`;
+    $('legend').innerHTML = '';
+    return;
+  }
+  let a = -Math.PI / 2, paths = '';
+  const color = (i, name) => name === 'Остальное' ? OTHER_COLOR : COLORS[i % COLORS.length];
+  data.forEach(([name, v], i) => {
+    const frac = v / total;
+    const a2 = a + frac * Math.PI * 2 - (data.length > 1 ? 0.012 : 0);
+    if (frac >= 0.9999) {
+      paths += `<circle cx="${C}" cy="${C}" r="${(R+r)/2}" style="fill:none;stroke:${color(i,name)}" stroke-width="${R-r}"><title>${esc(name)}: ${money(v)}</title></circle>`;
+    } else {
+      const large = (a2 - a) > Math.PI ? 1 : 0;
+      const p = (rad, ang) => `${C + rad*Math.cos(ang)},${C + rad*Math.sin(ang)}`;
+      paths += `<path style="fill:${color(i,name)}" d="M${p(R,a)} A${R},${R} 0 ${large} 1 ${p(R,a2)} L${p(r,a2)} A${r},${r} 0 ${large} 0 ${p(r,a)}Z"><title>${esc(name)}: ${money(v)}</title></path>`;
+    }
+    a += frac * Math.PI * 2;
+  });
+  $('donut').innerHTML = `<svg width="180" height="180" viewBox="0 0 180 180">${paths}
+    <text x="${C}" y="${C-2}" text-anchor="middle" style="fill:var(--text);font-size:15px;font-weight:600">${Math.round(total).toLocaleString('ru-RU')}</text>
+    <text x="${C}" y="${C+15}" text-anchor="middle">${CURRENCY} всего</text></svg>`;
+  $('legend').innerHTML = data.map(([name, v], i) => `
+    <li><span class="dot" style="background:${color(i,name)}"></span>${esc(name)}
+    <span class="muted">${Math.round(v/total*100)}%</span><span class="v">${money(v)}</span></li>`).join('');
+}
+
+function renderBars() {
+  let keys, labels, title;
+  if (period) {
+    const [y, m] = period.split('-').map(Number);
+    const days = new Date(y, m, 0).getDate();
+    keys = Array.from({length: days}, (_, i) => `${period}-${String(i+1).padStart(2,'0')}`);
+    labels = keys.map((_, i) => (i+1) % 5 === 0 || i === 0 ? String(i+1) : '');
+    title = `По дням · ${MONTHS[m-1]} ${y}`;
+  } else {
+    const now = new Date(); keys = []; labels = [];
+    for (let k = 11; k >= 0; k--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - k, 1);
+      keys.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+      labels.push(MONTHS[d.getMonth()]);
+    }
+    title = 'По месяцам · последние 12';
+  }
+  $('barsTitle').textContent = title;
+  const vals = keys.map(k => items.filter(i => i.date.startsWith(k))
+    .reduce((s,i) => s + (i.type === 'ret' ? -i.amount : i.amount), 0));
+  const max = Math.max(...vals.map(v => Math.max(v, 0)), 1);
+  const W = 520, H = 230, padB = 22, padT = 24, n = keys.length;
+  const bw = W / n, inner = Math.max(bw * (n > 15 ? 0.7 : 0.55), 2);
+  const bars = vals.map((v, i) => {
+    const h = Math.max(v, 0) / max * (H - padB - padT);
+    const x = i * bw + (bw - inner) / 2;
+    return `<rect x="${x}" y="${H - padB - h}" width="${inner}" height="${Math.max(h, v > 0 ? 2 : 0)}" rx="3" style="fill:var(--c1)"><title>${labels[i] || keys[i].slice(8)}: ${money(v)}</title></rect>
+      <text x="${i*bw + bw/2}" y="${H - 6}" text-anchor="middle">${labels[i]}</text>`;
+  }).join('');
+  const peak = vals.indexOf(Math.max(...vals));
+  const peakLbl = vals[peak] > 0 ? `<text x="${W}" y="12" text-anchor="end">макс. ${money(vals[peak])}</text>` : '';
+  $('bars').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;height:auto">
+    <line x1="0" x2="${W}" y1="${H-padB}" y2="${H-padB}" style="stroke:var(--line)"/>${bars}${peakLbl}</svg>`;
+}
+
+// ---- выгрузка ----
+async function save(filename, text, mime) {
+  if (!downloads) { notice('Скачивание недоступно в этом окне. Откройте страницу на claude.ai в браузере.', true); return; }
+  try { await downloads.save({ filename, data: new Blob([text], { type: mime }) }); }
+  catch (e) { if (e && e.code !== 'declined') notice('Не удалось скачать файл. Попробуйте ещё раз.', true); }
+}
+$('exportCsv').addEventListener('click', () => {
+  const q = s => `"${String(s).replace(/"/g, '""')}"`;
+  const rows = [['Дата','Что','Категория','Тип','Сумма'],
+    ...[...filtered()].sort((a,b) => a.date.localeCompare(b.date))
+      .map(i => [fmtDate(i.date), i.name, i.cat, i.type === 'ret' ? 'Возврат' : 'Покупка', String(i.type === 'ret' ? -i.amount : i.amount).replace('.', ',')])];
+  save(`zakupki${period ? '-' + period : ''}.csv`, '﻿' + rows.map(r => r.map(q).join(';')).join('\r\n'), 'text/csv');
+});
+$('exportJson').addEventListener('click', () => {
+  const plain = items.map(({id, type, name, cat, date, amount}) => ({id, type, name, cat, date, amount}));
+  save(`zakupki-backup-${today()}.json`, JSON.stringify(plain, null, 1), 'application/json');
+});
+
+// ---- восстановление из резервной копии (заменяет всю общую базу) ----
+$('importJson').addEventListener('click', () => $('importFile').click());
+$('importFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!Array.isArray(data) || !data.every(valid)) throw 0;
+    pendingImport = data;
+    notice(`<span class="grow">Заменить все записи в общей базе (${items.length}) на записи из файла (${data.length})? Это увидят все пользователи.</span>
+      <button class="danger" id="impYes">Заменить</button><button id="impNo">Отмена</button>`);
+  } catch { notice('Не удалось прочитать файл', true); }
+});
+$('notice').addEventListener('click', async e => {
+  if (e.target.id === 'impNo') { pendingImport = null; notice(''); return; }
+  if (e.target.id !== 'impYes' || !pendingImport) return;
+  const data = pendingImport; pendingImport = null;
+  const col = db.collection(COL);
+  const total = items.length + data.length; let done = 0;
+  const step = () => notice(`Восстанавливаем… ${done} из ${total}`);
+  try {
+    step();
+    for (const i of [...items]) { await col.doc(i.id).delete(); done++; if (done % 10 === 0) step(); }
+    for (const i of data) {
+      const id = /^[A-Za-z0-9_\-.~:@+]{1,100}$/.test(String(i.id || '')) && !/^\.+$/.test(String(i.id)) ? String(i.id) : newId();
+      const rec = { type: i.type, name: i.name.trim(), cat: i.cat.trim(), date: i.date, amount: i.amount, createdAt: new Date().toISOString() };
+      if (me) rec.by = me;
+      await col.doc(id).set(rec); done++; if (done % 10 === 0) step();
+    }
+    notice(`Готово: восстановлено записей — ${data.length}.`);
+  } catch (err) { notice(esc(errText(err)) + ` Успели обработать ${done} из ${total}.`, true); }
+});
+
+render();
+</script>
